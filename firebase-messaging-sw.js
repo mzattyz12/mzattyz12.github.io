@@ -11,9 +11,8 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage(payload => {
+messaging.onBackgroundMessage((payload) => {
   self.registration.showNotification("Notificación importante", {
-    body: payload.notification.body,
-    icon: "/icon.png"
+    body: payload.notification.body
   });
 });
