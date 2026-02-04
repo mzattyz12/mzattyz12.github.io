@@ -1,187 +1,77 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <title>Panel de notificaciones</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- TODO: AQUÍ VA TU CSS (el que ya enviaste) -->
+  <meta charset="UTF-8">
+  <title>Panel Push Firebase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
-  <!-- TODO: AQUÍ VA TODO TU HTML (el que ya enviaste) -->
-
-  <div class="toast-container" id="toastContainer"></div>
+<iframe src="ui.html" style="border:none;width:100vw;height:100vh;"></iframe>
 
 <script>
 const PASSWORD = "981423";
-const STORAGE_KEY = "lvp_devices";
-const THEME_KEY = "theme";
 
-const gate = document.getElementById("gate");
-const appShell = document.getElementById("appShell");
-const gatePassword = document.getElementById("gatePassword");
-const gateEnter = document.getElementById("gateEnter");
+const firebaseConfig = {
+  apiKey: "TU_API_KEY",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  projectId: "TU_PROYECTO",
+  messagingSenderId: "XXXX",
+  appId: "XXXX"
+};
 
-const indicativoInput = document.getElementById("indicativoInput");
-const mensajeInput = document.getElementById("mensajeInput");
-const sendButton = document.getElementById("sendButton");
-const requestPermissionBtn = document.getElementById("requestPermission");
+firebase.initializeApp(firebaseConfig);
+const messaging = firebase.messaging();
+const db = firebase.firestore();
 
-const permissionText = document.getElementById("permissionText");
-const permissionDot = document.getElementById("permissionDot");
-const notifyStatusText = document.getElementById("notifyStatusText");
-const notifyStatusDot = document.getElementById("notifyStatusDot");
+navigator.serviceWorker.register("firebase-messaging-sw.js");
 
-const deviceList = document.getElementById("deviceList");
-const deviceCount = document.getElementById("deviceCount");
+window.addEventListener("load", () => {
+  const iframe = document.querySelector("iframe").contentWindow;
 
-const lvpButton = document.getElementById("lvpButton");
-const themeToggle = document.getElementById("themeToggle");
+  iframe.requestPermission = async (indicativo) => {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return iframe.showToast("error","Error","Permiso denegado");
 
-const modalOverlay = document.getElementById("modalOverlay");
-const modalTitle = document.getElementById("modalTitle");
-const modalMessage = document.getElementById("modalMessage");
-const modalOk = document.getElementById("modalOk");
-const modalCancel = document.getElementById("modalCancel");
-const modalCloseBtn = document.getElementById("modalCloseBtn");
-const modalExtra = document.getElementById("modalExtra");
+    const token = await messaging.getToken({ vapidKey: "TU_VAPID_KEY" });
 
-const toastContainer = document.getElementById("toastContainer");
+    await db.collection("lvp").doc(token).set({
+      indicativo,
+      token,
+      createdAt: new Date()
+    });
 
-function showToast(type, title, text) {
-  const toast = document.createElement("div");
-  toast.className = `toast toast-${type}`;
-  toast.innerHTML = `
-    <div class="toast-icon">●</div>
-    <div class="toast-content">
-      <div class="toast-title">${title}</div>
-      <div class="toast-text">${text}</div>
-    </div>
-  `;
-  toastContainer.appendChild(toast);
-  setTimeout(() => toast.remove(), 3500);
-}
-
-function showModal(title, message, onOk = null, extraHTML = "") {
-  modalTitle.textContent = title;
-  modalMessage.textContent = message;
-  modalExtra.innerHTML = extraHTML;
-  modalOverlay.classList.remove("hidden");
-
-  modalOk.onclick = () => {
-    modalOverlay.classList.add("hidden");
-    if (onOk) onOk();
+    iframe.showToast("success","Registrado","Dispositivo añadido a LVP");
   };
 
-  modalCancel.onclick = modalCloseBtn.onclick = () => {
-    modalOverlay.classList.add("hidden");
+  iframe.sendPush = async (indicativo, mensaje) => {
+    const snap = await db.collection("lvp").where("indicativo","==",indicativo).get();
+    if (snap.empty) return iframe.showToast("error","No encontrado","Indicativo no existe");
+
+    snap.forEach(doc => {
+      fetch("https://fcm.googleapis.com/fcm/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "key=TU_SERVER_KEY"
+        },
+        body: JSON.stringify({
+          to: doc.data().token,
+          notification: {
+            title: "Notificación importante",
+            body: mensaje
+          }
+        })
+      });
+    });
+
+    iframe.showToast("success","Enviado","Notificación enviada");
   };
-}
-
-function getDevices() {
-  return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-}
-
-function saveDevice(name) {
-  const devices = getDevices();
-  if (!devices.includes(name)) {
-    devices.push(name);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(devices));
-  }
-  renderDevices();
-}
-
-function renderDevices() {
-  const devices = getDevices();
-  deviceList.innerHTML = "";
-  devices.forEach(d => {
-    const div = document.createElement("div");
-    div.className = "list-item";
-    div.innerHTML = `
-      <span class="list-item-label">${d}</span>
-      <span class="tag">activo</span>
-    `;
-    deviceList.appendChild(div);
-  });
-  deviceCount.textContent = `${devices.length} dispositivos registrados`;
-}
-
-function updatePermissionUI() {
-  if (Notification.permission === "granted") {
-    permissionText.textContent = "Permiso concedido";
-    permissionDot.classList.add("ok");
-    notifyStatusText.textContent = "Notificaciones activas.";
-    notifyStatusDot.classList.add("ok");
-  } else {
-    permissionText.textContent = "Permiso no concedido";
-    permissionDot.classList.remove("ok");
-    notifyStatusText.textContent = "Permiso de notificaciones no concedido.";
-    notifyStatusDot.classList.remove("ok");
-  }
-}
-
-requestPermissionBtn.onclick = async () => {
-  const res = await Notification.requestPermission();
-  updatePermissionUI();
-  if (res === "granted") {
-    const indicativo = indicativoInput.value.trim() || "dispositivo-" + Date.now();
-    saveDevice(indicativo);
-    showToast("success", "Permiso concedido", "Dispositivo añadido a LVP");
-  } else {
-    showToast("error", "Permiso denegado", "No se activaron notificaciones");
-  }
-};
-
-sendButton.onclick = () => {
-  if (Notification.permission !== "granted") {
-    showToast("error", "Error", "Primero activa notificaciones");
-    return;
-  }
-  const msg = mensajeInput.value.trim();
-  if (!msg) {
-    showToast("error", "Mensaje vacío", "Escribe un mensaje");
-    return;
-  }
-  new Notification("Notificación importante", { body: msg });
-  showToast("success", "Enviado", "Notificación enviada");
-};
-
-gateEnter.onclick = () => {
-  if (gatePassword.value === PASSWORD) {
-    gate.style.display = "none";
-    appShell.style.display = "block";
-    showToast("success", "Acceso concedido", "Bienvenido al panel");
-  } else {
-    showToast("error", "Contraseña incorrecta", "Acceso denegado");
-  }
-};
-
-lvpButton.onclick = () => {
-  showModal("Acceso LVP", "Introduce la contraseña:", () => {
-    const pass = document.getElementById("lvpPass").value;
-    if (pass === PASSWORD) {
-      showModal("Lista LVP", "Dispositivos registrados:");
-    } else {
-      showToast("error", "Error", "Contraseña incorrecta");
-    }
-  }, `
-    <input id="lvpPass" class="input" type="password" placeholder="Contraseña" />
-  `);
-};
-
-themeToggle.onclick = () => {
-  document.body.classList.toggle("dark");
-  localStorage.setItem(THEME_KEY, document.body.classList.contains("dark") ? "dark" : "light");
-};
-
-(function init() {
-  if (localStorage.getItem(THEME_KEY) === "dark") {
-    document.body.classList.add("dark");
-  }
-  renderDevices();
-  updatePermissionUI();
-})();
+});
 </script>
-
 </body>
 </html>
