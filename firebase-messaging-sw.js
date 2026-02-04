@@ -1,5 +1,5 @@
-importScripts("https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js");
 
 firebase.initializeApp({
   apiKey: "AIzaSyDdmrhtCWO0Dk_g1ZjVD3W7YvIfbJRi0jI",
@@ -10,9 +10,3 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-
-messaging.onBackgroundMessage(payload => {
-  self.registration.showNotification("Notificación importante", {
-    body: payload.notification.body
-  });
-});
