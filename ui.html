@@ -4,39 +4,158 @@
   <meta charset="UTF-8" />
   <title>Panel de notificaciones</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Pega aquí tu CSS completo (el que me pasaste) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
+
+  <!-- TODO: tu CSS va aquí (no lo repito para no romper el mensaje) -->
 </head>
 <body>
-  <!-- Pega aquí todo tu HTML de UI -->
+  <!-- TU UI EXACTA (la que me pasaste) -->
+  <!-- PEGA AQUÍ TODO TU BODY TAL CUAL LO ENVIASTE -->
 
 <script>
-  window.showToast = (type, title, text) => alert(title + ": " + text);
+/* ================== FIREBASE CONFIG ================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyDdmrhtCWO0Dk_g1ZjVD3W7YvIfbJRi0jI",
+  authDomain: "messgsender.firebaseapp.com",
+  projectId: "messgsender",
+  storageBucket: "messgsender.firebasestorage.app",
+  messagingSenderId: "271051103266",
+  appId: "1:271051103266:web:c92c4d33e340bdb3a2fe7b",
+  measurementId: "G-77SHQB6YFK"
+};
 
-  window.renderLVP = (devices) => {
-    const list = document.getElementById("deviceList");
-    const count = document.getElementById("deviceCount");
-    list.innerHTML = "";
-    devices.forEach(d => {
-      const div = document.createElement("div");
-      div.className = "list-item";
-      div.innerHTML = `<span>${d.indicativo}</span>`;
-      list.appendChild(div);
+firebase.initializeApp(firebaseConfig);
+firebase.analytics();
+
+const messaging = firebase.messaging();
+const db = firebase.firestore();
+
+const PASSWORD = "981423";
+const FUNCTION_URL = "https://us-central1-messgsender.cloudfunctions.net/sendPush";
+
+/* ================== UI HELPERS ================== */
+function showToast(type, title, text) {
+  alert(title + ": " + text);
+}
+
+function showModal(title, text) {
+  document.getElementById("modalTitle").innerText = title;
+  document.getElementById("modalMessage").innerText = text;
+  document.getElementById("modalOverlay").classList.remove("hidden");
+}
+
+document.getElementById("modalCloseBtn").onclick = () => {
+  document.getElementById("modalOverlay").classList.add("hidden");
+};
+
+document.getElementById("modalCancel").onclick = () => {
+  document.getElementById("modalOverlay").classList.add("hidden");
+};
+
+document.getElementById("modalOk").onclick = () => {
+  document.getElementById("modalOverlay").classList.add("hidden");
+};
+
+/* ================== GATE ================== */
+document.getElementById("gateEnter").onclick = () => {
+  const pass = document.getElementById("gatePassword").value;
+  if (pass === PASSWORD) {
+    document.getElementById("gate").style.display = "none";
+    document.getElementById("appShell").style.display = "block";
+  } else {
+    showModal("Error", "Contraseña incorrecta");
+  }
+};
+
+/* ================== THEME ================== */
+document.getElementById("themeToggle").onclick = () => {
+  document.body.classList.toggle("dark");
+};
+
+/* ================== PERMISSION ================== */
+async function requestPermission() {
+  try {
+    const token = await messaging.getToken({
+      vapidKey: "PEGA_AQUI_TU_VAPID_KEY"
     });
-    count.textContent = devices.length + " dispositivos registrados";
-  };
 
-  document.getElementById("requestPermission").onclick = () => {
     const indicativo = document.getElementById("indicativoInput").value || "dispositivo-" + Date.now();
-    window.parent.requestPermissionAndRegister(indicativo);
-  };
 
-  document.getElementById("sendButton").onclick = () => {
-    const indicativo = document.getElementById("indicativoInput").value;
-    const mensaje = document.getElementById("mensajeInput").value;
-    window.parent.sendPushToIndicativo(indicativo, mensaje);
-  };
+    await db.collection("lvp").doc(token).set({
+      token,
+      indicativo,
+      createdAt: new Date()
+    });
 
-  window.refreshLVP = () => window.parent.refreshLVP();
+    renderLVP();
+    document.getElementById("permissionDot").classList.add("ok");
+    document.getElementById("permissionText").innerText = "Permiso concedido";
+    showModal("OK", "Notificaciones activadas");
+  } catch (e) {
+    showModal("Error", "No se pudo activar notificaciones");
+  }
+}
+
+document.getElementById("requestPermission").onclick = requestPermission;
+
+/* ================== LVP ================== */
+async function renderLVP() {
+  const snap = await db.collection("lvp").get();
+  const list = document.getElementById("deviceList");
+  list.innerHTML = "";
+  document.getElementById("deviceCount").innerText = snap.size + " dispositivos registrados";
+
+  snap.forEach(doc => {
+    const d = doc.data();
+    const el = document.createElement("div");
+    el.className = "list-item";
+    el.innerHTML = `
+      <span class="list-item-label">${d.indicativo}</span>
+      <span class="list-item-meta">OK</span>
+    `;
+    list.appendChild(el);
+  });
+}
+
+renderLVP();
+
+/* ================== SEND PUSH ================== */
+document.getElementById("sendButton").onclick = async () => {
+  const indicativo = document.getElementById("indicativoInput").value;
+  const mensaje = document.getElementById("mensajeInput").value;
+
+  if (!indicativo || !mensaje) {
+    showModal("Error", "Rellena indicativo y mensaje");
+    return;
+  }
+
+  const res = await fetch(FUNCTION_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ indicativo, mensaje, password: PASSWORD })
+  });
+
+  const data = await res.json();
+
+  if (data.ok) {
+    showModal("Enviado", "Notificación enviada correctamente");
+  } else {
+    showModal("Error", data.error || "Error enviando notificación");
+  }
+};
+
+/* ================== LVP BUTTON ================== */
+document.getElementById("lvpButton").onclick = () => {
+  const pass = prompt("Contraseña LVP:");
+  if (pass !== PASSWORD) {
+    showModal("Error", "Contraseña incorrecta");
+  } else {
+    showModal("LVP", "Dispositivos cargados abajo 👇");
+  }
+};
 </script>
 </body>
 </html>
