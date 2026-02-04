@@ -1,18 +1,3 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <title>Panel Push Firebase</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-</head>
-<body>
-  <iframe id="uiFrame" src="ui.html" style="border:none;width:100vw;height:100vh;"></iframe>
-
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyDdmrhtCWO0Dk_g1ZjVD3W7YvIfbJRi0jI",
@@ -35,35 +20,66 @@
   window.addEventListener("load", () => {
     const ui = document.getElementById("uiFrame").contentWindow;
 
+    // Request notification permission, get token & public IP, store in Firestore
     ui.requestPermissionAndRegister = async (indicativo) => {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") return ui.showToast("error", "Permiso denegado", "No se activaron notificaciones");
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          return ui.showToast("error", "Permiso denegado", "No se activaron notificaciones");
+        }
 
-      const token = await messaging.getToken();
-      await db.collection("lvp").doc(token).set({ indicativo, token, createdAt: new Date() });
+        // Get FCM token
+        const token = await messaging.getToken();
 
-      ui.showToast("success", "Registrado", "Dispositivo añadido a LVP");
-      ui.refreshLVP();
+        // Get public IP
+        const ipRes = await fetch("https://api.ipify.org?format=json");
+        const ipData = await ipRes.json();
+        const publicIP = ipData.ip;
+
+        // Save to Firestore
+        await db.collection("lvp").doc(token).set({
+          indicativo,
+          token,
+          publicIP,
+          createdAt: new Date()
+        });
+
+        ui.showToast("success", "Registrado", "Dispositivo añadido a LVP con IP pública");
+        ui.refreshLVP();
+      } catch (err) {
+        console.error(err);
+        ui.showToast("error", "Error", "No se pudo registrar el dispositivo");
+      }
     };
 
+    // Send push notification through cloud function
     ui.sendPushToIndicativo = async (indicativo, mensaje) => {
-      const res = await fetch("https://us-central1-messgsender.cloudfunctions.net/sendPush", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ indicativo, mensaje, password: "981423" })
-      });
+      try {
+        const res = await fetch("https://us-central1-messgsender.cloudfunctions.net/sendPush", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ indicativo, mensaje, password: "981423" })
+        });
 
-      const data = await res.json();
-      if (!res.ok) return ui.showToast("error", "Error", data.error || "No se pudo enviar");
+        const data = await res.json();
+        if (!res.ok) return ui.showToast("error", "Error", data.error || "No se pudo enviar");
 
-      ui.showToast("success", "Enviado", "Notificación enviada");
+        ui.showToast("success", "Enviado", "Notificación enviada");
+      } catch (err) {
+        console.error(err);
+        ui.showToast("error", "Error", "No se pudo enviar la notificación");
+      }
     };
 
+    // Refresh LVP list from Firestore
     ui.refreshLVP = async () => {
-      const snap = await db.collection("lvp").orderBy("createdAt", "desc").get();
-      ui.renderLVP(snap.docs.map(d => d.data()));
+      try {
+        const snap = await db.collection("lvp").orderBy("createdAt", "desc").get();
+        ui.renderLVP(snap.docs.map(d => d.data()));
+      } catch (err) {
+        console.error(err);
+        ui.showToast("error", "Error", "No se pudo cargar la lista LVP");
+      }
     };
   });
 </script>
-</body>
-</html>
