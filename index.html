@@ -1,4 +1,4 @@
-INDEX.HTML
+
 
 <!DOCTYPE html>
 <html lang="es">
@@ -6,171 +6,45 @@ INDEX.HTML
   <meta charset="UTF-8" />
   <title>Panel de notificaciones</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
-
-  <style>
-    /* ======= TU UI COMPLETA ======= */
-    :root {
-      --bg: #f5f5f7;
-      --bg-elevated: #ffffff;
-      --text: #111111;
-      --text-secondary: #6e6e73;
-      --accent: #007aff;
-      --accent-soft: rgba(0,122,255,0.12);
-      --border: #d2d2d7;
-      --danger: #ff3b30;
-      --success: #34c759;
-      --shadow-soft: 0 18px 40px rgba(0,0,0,0.08);
-      --radius-large: 18px;
-      --radius-medium: 12px;
-      --radius-small: 8px;
-      --transition-fast: 0.18s ease-out;
-      --font-main: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-        "SF Pro Display", "Segoe UI", sans-serif;
-    }
-    .dark {
-      --bg: #000000;
-      --bg-elevated: #1c1c1e;
-      --text: #f5f5f7;
-      --text-secondary: #8e8e93;
-      --accent: #0a84ff;
-      --accent-soft: rgba(10,132,255,0.18);
-      --border: #3a3a3c;
-      --shadow-soft: 0 18px 40px rgba(0,0,0,0.7);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: var(--font-main);
-      background: radial-gradient(circle at top, #dfe9ff 0, var(--bg) 45%);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background var(--transition-fast), color var(--transition-fast);
-    }
-    /* (TODOS LOS ESTILOS QUE ME DISTE, SIN CAMBIOS) */
-  </style>
 </head>
+<body style="margin:0; display:flex; justify-content:center; align-items:center; min-height:100vh;">
 
-<body>
-
-<div id="gate" class="gate-overlay">
-  <div class="gate-card">
-    <div class="gate-title">Acceso al panel</div>
-    <div class="gate-subtitle">Introduce la contraseña para entrar al panel de mensajes.</div>
-    <div class="field-group gate-input">
-      <div class="field-label">Contraseña</div>
-      <input id="gatePassword" type="password" class="input" placeholder="••••••" />
+<div id="gate" class="gate-overlay" style="position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background: radial-gradient(circle at top, #dfe9ff 0, #000000 55%); z-index:10000;">
+  <div class="gate-card" style="width:100%; max-width:360px; background:rgba(255,255,255,0.9); border-radius:26px; padding:22px 20px 18px; box-shadow:0 26px 60px rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.8); text-align:center; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);">
+    <div class="gate-title" style="font-size:18px; font-weight:600; margin-bottom:4px; letter-spacing:-0.02em;">Acceso al panel</div>
+    <div class="gate-subtitle" style="font-size:13px; color:#6e6e73; margin-bottom:14px;">Introduce la contraseña para entrar al panel de mensajes.</div>
+    <div class="field-group gate-input" style="display:flex; flex-direction:column; gap:10px; margin-top:8px;">
+      <div class="field-label" style="font-size:12px; color:#6e6e73; margin-bottom:2px;">Contraseña</div>
+      <input id="gatePassword" type="password" class="input" placeholder="••••••" style="width:100%; border-radius:12px; border:1px solid #d2d2d7; padding:9px 11px; font-size:13px;" />
     </div>
-    <button id="gateEnter" class="btn btn-primary" style="width: 100%; margin-top: 4px;">Entrar</button>
-    <div class="gate-footer">Seguridad básica. No usar para datos sensibles reales.</div>
+    <button id="gateEnter" class="btn btn-primary" style="width:100%; margin-top:4px; border:none; border-radius:999px; padding:8px 14px; font-size:13px; font-weight:500; cursor:pointer; background:#007aff; color:#fff;">Entrar</button>
+    <div class="gate-footer" style="font-size:11px; color:#8e8e93; margin-top:8px;">Seguridad básica. No usar para datos sensibles reales.</div>
   </div>
 </div>
 
-<div class="app-shell" id="appShell" style="display:none;">
-  <!-- ===== TU UI COMPLETA ===== -->
-  <!-- AQUÍ VA TODO TU HTML DE LA UI TAL CUAL ME LO DISTE -->
-</div>
-
-<div id="modalOverlay" class="overlay hidden">
-  <div class="modal">
-    <button class="modal-close" id="modalCloseBtn">&times;</button>
-    <div class="modal-title" id="modalTitle">Título</div>
-    <div class="modal-text" id="modalMessage">Mensaje</div>
-    <div class="modal-actions" id="modalActions">
-      <button class="btn btn-ghost" id="modalCancel">Cancelar</button>
-      <button class="btn btn-primary" id="modalOk">Aceptar</button>
-    </div>
-  </div>
-</div>
+<!-- iframe que carga la UI -->
+<iframe id="uiFrame" src="ui.html" style="display:none; width:100%; height:100vh; border:none;"></iframe>
 
 <script>
-  // ====== FIREBASE ======
-  const firebaseConfig = {
-    apiKey: "AIzaSyDdmrhtCWO0Dk_g1ZjVD3W7YvIfbJRi0jI",
-    authDomain: "messgsender.firebaseapp.com",
-    projectId: "messgsender",
-    storageBucket: "messgsender.firebasestorage.app",
-    messagingSenderId: "271051103266",
-    appId: "1:271051103266:web:c92c4d33e340bdb3a2fe7b",
-    measurementId: "G-77SHQB6YFK"
-  };
+const PASSWORD = "981423";
 
-  firebase.initializeApp(firebaseConfig);
-  firebase.analytics();
-
-  const messaging = firebase.messaging();
-  const db = firebase.firestore();
-
-  const PASSWORD = "981423";
-  const FUNCTION_URL = "https://us-central1-messgsender.cloudfunctions.net/sendPush";
-  const VAPID_KEY = "BBHuiio-g9qiWRkKoWakdlnFG3_fUAlFKydWwnGp50eKvqaEzSWTAoHAfYExuJt0LnPbuuscck8V_Q3Em1A1I6g";
-
-  async function requestPermission() {
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") throw new Error("Permiso denegado");
-
-      const token = await messaging.getToken({ vapidKey: VAPID_KEY });
-      const indicativo = document.getElementById("indicativoInput").value || "dispositivo-" + Date.now();
-
-      await db.collection("lvp").doc(token).set({
-        token,
-        indicativo,
-        createdAt: new Date()
-      });
-
-      alert("Notificaciones activadas correctamente");
-      renderLVP();
-    } catch (e) {
-      alert("Error activando notificaciones");
-    }
+document.getElementById("gateEnter").onclick = () => {
+  const pass = document.getElementById("gatePassword").value.trim();
+  if(pass === PASSWORD){
+    document.getElementById("gate").style.display = "none";
+    document.getElementById("uiFrame").style.display = "block";
+  } else {
+    alert("Contraseña incorrecta");
   }
+};
 
-  async function renderLVP() {
-    const snap = await db.collection("lvp").get();
-    const list = document.getElementById("deviceList");
-    list.innerHTML = "";
-    document.getElementById("deviceCount").innerText = snap.size + " dispositivos registrados";
-
-    snap.forEach(doc => {
-      const d = doc.data();
-      const el = document.createElement("div");
-      el.className = "list-item";
-      el.innerHTML = `<span class="list-item-label">${d.indicativo}</span><span class="list-item-meta">OK</span>`;
-      list.appendChild(el);
-    });
-  }
-
-  async function sendNotification() {
-    const indicativo = document.getElementById("indicativoInput").value.trim();
-    const mensaje = document.getElementById("mensajeInput").value.trim();
-    if (!indicativo || !mensaje) {
-      alert("Rellena indicativo y mensaje");
-      return;
-    }
-
-    const res = await fetch(FUNCTION_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ indicativo, mensaje, password: PASSWORD })
-    });
-
-    const data = await res.json();
-    if (data.ok) alert("Notificación enviada");
-    else alert("Error: " + data.error);
-  }
-
-  document.getElementById("requestPermission").onclick = requestPermission;
-  document.getElementById("sendButton").onclick = sendNotification;
+document.getElementById("gatePassword").addEventListener("keydown", e => {
+  if(e.key === "Enter") document.getElementById("gateEnter").click();
+});
 </script>
-
 </body>
 </html>
